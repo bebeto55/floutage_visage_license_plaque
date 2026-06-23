@@ -60,11 +60,32 @@ def blur_yolo(img, model, mode="rect"):
             cy = (y1 + y2) // 2
             radius = max(x2 - x1, y2 - y1) // 2
             cv2.circle(mask, (cx, cy), radius, 255, -1)
+            nb_visages = len(results[0].boxes)
 
+            cv2.putText(
+                img,
+                f"visages détectés : {nb_visages}",
+                (45, 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (255, 20, 255),
+                2
+            )
         else:
             mask[y1:y2, x1:x2] = 255
 
     img[mask == 255] = blurred[mask == 255]
+    nb_plaques = len(results[0].boxes)
+
+    cv2.putText(
+        img,
+        f"Plaques : {nb_plaques}",
+        (20, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 20, 255),
+        2
+    )
     return img
 
 # ====================================================
@@ -157,20 +178,18 @@ elif mode in ["Webcam", "Téléphone"]:
             self.last_frame = None
 
         def recv(self, frame):
-
             img = frame.to_ndarray(format="bgr24")
 
             self.frame_count += 1
 
             if self.frame_count % skip == 0:
                 self.last_frame = process(img)
-
-            if self.last_frame is None:
-                self.last_frame = img
             else:
-                return av.VideoFrame.from_ndarray(
-                    self.last_frame,
-                    format="bgr24"
+                self.last_frame = img
+
+            return av.VideoFrame.from_ndarray(
+                self.last_frame,
+                format="bgr24"
                 )
 
     constraints = {"video": True, "audio": False}
