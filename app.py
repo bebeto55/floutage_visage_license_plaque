@@ -241,5 +241,5 @@ elif mode in ["Webcam", "Téléphone"]:
         key="stream",
         video_processor_factory=VideoProcessor,
         media_stream_constraints=constraints,
-        async_processing=False
+        async_processing= False
     )
