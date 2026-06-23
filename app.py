@@ -13,6 +13,7 @@ from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 heure = datetime.now().strftime("%H:%M:%S")
+heure = heure + " GMT"
 # ====================================================
 # MODELS
 # ====================================================
