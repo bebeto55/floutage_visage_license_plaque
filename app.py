@@ -167,7 +167,7 @@ elif mode in ["Webcam", "Téléphone"]:
 
             if self.frame_count % skip == 0:
 
-                self.last_frame = blur_plates(img)
+                self.last_frame = blur_yolo(img)
 
             if self.last_frame is None:
                 self.last_frame = img
