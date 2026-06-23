@@ -65,24 +65,24 @@ def blur_yolo(img, model, mode="rect"):
             cv2.putText(
                 img,
                 f"visages détectés : {nb_visages}",
-                (45, 20),
+                (50, 50),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
+                2,
                 (255, 20, 255),
                 2
             )
         else:
             mask[y1:y2, x1:x2] = 255
+            nb_plaques = len(results[0].boxes)
 
     img[mask == 255] = blurred[mask == 255]
-    nb_plaques = len(results[0].boxes)
 
     cv2.putText(
         img,
         f"Plaques : {nb_plaques}",
-        (20, 30),
+        (50, 90),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
+        2,
         (255, 20, 255),
         2
     )
