@@ -1,5 +1,6 @@
 import torch
 torch.set_num_threads(2)
+
 import streamlit as st
 import cv2
 import numpy as np
@@ -18,8 +19,8 @@ os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
 @st.cache_resource
 def load_models():
-    face_model = YOLO("yolov8n-face.pt")   # <-- modèle visages
-    plate_model = YOLO("best.pt")  # <-- modèle plaques
+    face_model = YOLO("yolov8n-face.pt")
+    plate_model = YOLO("best.pt")
     return face_model, plate_model
 
 face_model, plate_model = load_models()
@@ -28,7 +29,7 @@ face_model, plate_model = load_models()
 # UI
 # ====================================================
 
-st.title("🔒 Floutage intelligent YOLO (visages et plaques d'immatriculation)")
+st.title("🔒 YOLO Floutage Visages & Plaques")
 
 mode = st.sidebar.radio(
     "Mode",
@@ -36,75 +37,106 @@ mode = st.sidebar.radio(
 )
 
 target = st.sidebar.selectbox(
-    "Que veux-tu flouter ?",
+    "Que flouter ?",
     ["Visages", "Plaques", "Les deux"]
 )
 
 # ====================================================
-# CORE BLUR FUNCTION
+# VISAGE
 # ====================================================
 
-def blur_yolo(img, model, mode="rect"):
+def blur_faces(img, model):
 
-    results = model(img, conf=0.25, iou=0.45, imgsz=512, verbose=False)
+    results = model.predict(
+        img,
+        conf=0.35,
+        iou=0.45,
+        imgsz=416,
+        verbose=False
+    )
 
-    blurred = cv2.GaussianBlur(img, (99, 99), 30)
-    mask = np.zeros(img.shape[:2], dtype=np.uint8)
+    boxes = results[0].boxes.xyxy.cpu().numpy()
 
-    for box in results[0].boxes.xyxy.cpu().numpy():
+    for x1, y1, x2, y2 in boxes.astype(int):
 
-        x1, y1, x2, y2 = map(int, box)
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(img.shape[1], x2), min(img.shape[0], y2)
 
-        if mode == "circle":
-            cx = (x1 + x2) // 2
-            cy = (y1 + y2) // 2
-            radius = max(x2 - x1, y2 - y1) // 2
-            cv2.circle(mask, (cx, cy), radius, 255, -1)
-            nb_visages = len(results[0].boxes)
+        roi = img[y1:y2, x1:x2]
 
-            cv2.putText(
-                img,
-                f"visages détectés : {nb_visages}",
-                (50, 50),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                2,
-                (255, 20, 255),
-                2
-            )
-        else:
-            mask[y1:y2, x1:x2] = 255
-            nb_plaques = len(results[0].boxes)
+        if roi.size == 0:
+            continue
 
-    img[mask == 255] = blurred[mask == 255]
+        img[y1:y2, x1:x2] = cv2.GaussianBlur(roi, (51, 51), 30)
 
     cv2.putText(
         img,
-        f"Plaques : {nb_plaques}",
-        (50, 90),
+        f"Visages: {len(boxes)}",
+        (50, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
-        2,
-        (255, 20, 255),
+        1,
+        (0, 255, 255),
         2
     )
+
     return img
 
 # ====================================================
-# APPLY LOGIC
+# PLAQUES
+# ====================================================
+
+def blur_plates(img, model):
+
+    results = model.predict(
+        img,
+        conf=0.35,
+        iou=0.45,
+        imgsz=416,
+        verbose=False
+    )
+
+    boxes = results[0].boxes.xyxy.cpu().numpy()
+
+    for x1, y1, x2, y2 in boxes.astype(int):
+
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(img.shape[1], x2), min(img.shape[0], y2)
+
+        roi = img[y1:y2, x1:x2]
+
+        if roi.size == 0:
+            continue
+
+        img[y1:y2, x1:x2] = cv2.GaussianBlur(roi, (51, 51), 30)
+
+    cv2.putText(
+        img,
+        f"Plaques: {len(boxes)}",
+        (50, 90),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (0, 255, 255),
+        2
+    )
+
+    return img
+
+# ====================================================
+# PROCESS
 # ====================================================
 
 def process(img):
 
     if target == "Visages":
-        img = blur_yolo(img, face_model, mode="circle")
+        return blur_faces(img, face_model)
 
     elif target == "Plaques":
-        img = blur_yolo(img, plate_model, mode="rect")
+        return blur_plates(img, plate_model)
 
     else:
-        img = blur_yolo(img, face_model, mode="circle")
-        img = blur_yolo(img, plate_model, mode="rect")
-
-    return img
+        img = blur_faces(img, face_model)
+        img = blur_plates(img, plate_model)
+        return img
 
 # ====================================================
 # IMAGE
@@ -115,7 +147,6 @@ if mode == "Image":
     file = st.file_uploader("Upload image", type=["jpg", "png", "jpeg"])
 
     if file:
-
         file_bytes = np.asarray(bytearray(file.read()), dtype=np.uint8)
         img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
@@ -140,14 +171,13 @@ elif mode == "Vidéo":
 
         frame_placeholder = st.empty()
 
-        skip = st.slider("Skip frames", 1, 5, 1)
+        skip = st.slider("Skip frames", 1, 5, 2)
 
         i = 0
 
         while cap.isOpened():
 
             ret, frame = cap.read()
-
             if not ret:
                 break
 
@@ -169,40 +199,38 @@ elif mode == "Vidéo":
 
 elif mode in ["Webcam", "Téléphone"]:
 
-    skip = st.slider("Skip frames", 1, 5, 3)
+    skip = st.slider("Skip frames", 1, 5, 2)
 
     class VideoProcessor(VideoProcessorBase):
 
         def __init__(self):
             self.frame_count = 0
-            self.last_frame = None
 
         def recv(self, frame):
+
             img = frame.to_ndarray(format="bgr24")
 
             self.frame_count += 1
 
             if self.frame_count % skip == 0:
-                self.last_frame = process(img)
-            else:
-                self.last_frame = img
+                img = process(img)
 
             return av.VideoFrame.from_ndarray(
-                self.last_frame,
+                img,
                 format="bgr24"
-                )
+            )
 
     constraints = {"video": True, "audio": False}
 
     if mode == "Téléphone":
         constraints = {
-    "video": True,
-    "audio": False
-    }
+            "video": True,
+            "audio": False
+        }
 
     webrtc_streamer(
         key="stream",
         video_processor_factory=VideoProcessor,
         media_stream_constraints=constraints,
-        async_processing=True
+        async_processing=False
     )
