@@ -29,7 +29,7 @@ face_model, plate_model = load_models()
 # UI
 # ====================================================
 
-st.title("🔒 YOLO Floutage Avancé (visages + plaques)")
+st.title("🔒 YOLO Floutage Stable (visages + plaques)")
 
 mode = st.sidebar.radio(
     "Mode",
@@ -43,12 +43,12 @@ target = st.sidebar.selectbox(
 
 st.sidebar.markdown("## ⚙️ Paramètres YOLO")
 
-conf = st.sidebar.slider("Confiance (conf)", 0.1, 0.9, 0.35, 0.05)
+conf = st.sidebar.slider("Confiance", 0.1, 0.9, 0.35, 0.05)
 iou = st.sidebar.slider("IoU", 0.1, 0.9, 0.45, 0.05)
-imgsz = st.sidebar.select_slider("Résolution YOLO", [320, 416, 512, 640], value=416)
+imgsz = st.sidebar.select_slider("Résolution", [320, 416, 512], value=320)
 
 # ====================================================
-# FACE BLUR (CERCLE)
+# FACE BLUR (optimisé)
 # ====================================================
 
 def blur_faces(img, model):
@@ -63,34 +63,22 @@ def blur_faces(img, model):
 
     boxes = results[0].boxes.xyxy.cpu().numpy()
 
-    overlay = img.copy()
-
     for x1, y1, x2, y2 in boxes.astype(int):
 
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(img.shape[1], x2), min(img.shape[0], y2)
 
-        cx = (x1 + x2) // 2
-        cy = (y1 + y2) // 2
-        radius = max((x2 - x1), (y2 - y1)) // 2
-
-        # ROI flouté
         roi = img[y1:y2, x1:x2]
         if roi.size == 0:
             continue
 
-        blurred = cv2.GaussianBlur(roi, (51, 51), 30)
-
-        # masque circulaire
-        mask = np.zeros(img.shape[:2], dtype=np.uint8)
-        cv2.circle(mask, (cx, cy), radius, 255, -1)
-
-        img[mask == 255] = blurred[mask == 255]
+        blur = cv2.GaussianBlur(roi, (51, 51), 30)
+        img[y1:y2, x1:x2] = blur
 
     cv2.putText(
         img,
         f"Visages: {len(boxes)}",
-        (50, 50),
+        (20, 40),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.8,
         (0, 255, 255),
@@ -100,7 +88,7 @@ def blur_faces(img, model):
     return img
 
 # ====================================================
-# PLATE BLUR (RECTANGLE)
+# PLATE BLUR
 # ====================================================
 
 def blur_plates(img, model):
@@ -127,7 +115,7 @@ def blur_plates(img, model):
     cv2.putText(
         img,
         f"Plaques: {len(boxes)}",
-        (50, 90),
+        (20, 80),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.8,
         (0, 255, 255),
@@ -141,6 +129,13 @@ def blur_plates(img, model):
 # ====================================================
 
 def process(img):
+
+    if mode in ["Webcam", "Téléphone"]:
+        imgsz_live = 320
+    else:
+        imgsz_live = imgsz
+
+    global face_model, plate_model
 
     if target == "Visages":
         return blur_faces(img, face_model)
@@ -185,7 +180,6 @@ elif mode == "Vidéo":
         cap = cv2.VideoCapture(tfile.name)
 
         frame_placeholder = st.empty()
-
         skip = st.slider("Skip frames", 1, 5, 2)
 
         i = 0
@@ -209,7 +203,7 @@ elif mode == "Vidéo":
         cap.release()
 
 # ====================================================
-# WEBCAM / TELEPHONE
+# WEBCAM / TELEPHONE (STABLE VERSION)
 # ====================================================
 
 elif mode in ["Webcam", "Téléphone"]:
@@ -220,26 +214,28 @@ elif mode in ["Webcam", "Téléphone"]:
 
         def __init__(self):
             self.frame_count = 0
+            self.last_frame = None
 
         def recv(self, frame):
 
             img = frame.to_ndarray(format="bgr24")
-
             self.frame_count += 1
 
+            # traiter seulement 1 frame sur N
             if self.frame_count % skip == 0:
-                img = process(img)
+                self.last_frame = process(img)
+            else:
+                if self.last_frame is None:
+                    self.last_frame = img
 
             return av.VideoFrame.from_ndarray(
-                img,
+                self.last_frame,
                 format="bgr24"
             )
-
-    constraints = {"video": True, "audio": False}
 
     webrtc_streamer(
         key="stream",
         video_processor_factory=VideoProcessor,
-        media_stream_constraints=constraints,
-        async_processing= False
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=False
     )
