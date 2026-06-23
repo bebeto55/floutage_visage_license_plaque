@@ -7,12 +7,12 @@ import numpy as np
 import tempfile
 import av
 import os
-
+from datetime import datetime
 from ultralytics import YOLO
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
-
+heure = datetime.now().strftime("%H:%M:%S")
 # ====================================================
 # MODELS
 # ====================================================
@@ -48,7 +48,7 @@ iou = st.sidebar.slider("IoU", 0.1, 0.9, 0.45, 0.05)
 imgsz = st.sidebar.select_slider("Résolution", [320, 416, 512], value=320)
 
 # ====================================================
-# FACE BLUR (optimisé)
+# FACE BLUR 
 # ====================================================
 
 def blur_faces(img, model):
@@ -84,6 +84,9 @@ def blur_faces(img, model):
         (0, 255, 255),
         2
     )
+    cv2.putText(img, heure, (10, 100),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1, (0, 255, 0), 2)
 
     return img
 
@@ -121,6 +124,9 @@ def blur_plates(img, model):
         (0, 255, 255),
         2
     )
+    cv2.putText(img, heure, (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1, (0, 255, 0), 2)
 
     return img
 
