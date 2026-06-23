@@ -1,3 +1,5 @@
+import torch
+torch.set_num_threads(2)
 import streamlit as st
 import cv2
 import numpy as np
@@ -44,7 +46,7 @@ target = st.sidebar.selectbox(
 
 def blur_yolo(img, model, mode="rect"):
 
-    results = model(img, conf=0.15, iou=0.45, imgsz=928, verbose=False)
+    results = model(img, conf=0.25, iou=0.45, imgsz=512, verbose=False)
 
     blurred = cv2.GaussianBlur(img, (99, 99), 30)
     mask = np.zeros(img.shape[:2], dtype=np.uint8)
@@ -146,14 +148,9 @@ elif mode == "Vidéo":
 
 elif mode in ["Webcam", "Téléphone"]:
 
-    skip = st.slider(
-        "Skip frames (perf)",
-        1,
-        5,
-        3
-    )
+    skip = st.slider("Skip frames", 1, 5, 3)
 
-    class PlateProcessor(VideoProcessorBase):
+    class VideoProcessor(VideoProcessorBase):
 
         def __init__(self):
             self.frame_count = 0
@@ -166,33 +163,27 @@ elif mode in ["Webcam", "Téléphone"]:
             self.frame_count += 1
 
             if self.frame_count % skip == 0:
-
-                self.last_frame = blur_yolo(img)
+                self.last_frame = process(img)
 
             if self.last_frame is None:
                 self.last_frame = img
+            else:
+                return av.VideoFrame.from_ndarray(
+                    self.last_frame,
+                    format="bgr24"
+                )
 
-            return av.VideoFrame.from_ndarray(
-                self.last_frame,
-                format="bgr24"
-            )
-
-    constraints = {
-        "video": True,
-        "audio": False,
-    }
+    constraints = {"video": True, "audio": False}
 
     if mode == "Téléphone":
         constraints = {
-            "video": {
-                "facingMode": "environment"
-            },
-            "audio": False,
-        }
+    "video": True,
+    "audio": False
+    }
 
     webrtc_streamer(
-        key=f"camera-{mode}",
-        video_processor_factory=PlateProcessor,
+        key="stream",
+        video_processor_factory=VideoProcessor,
         media_stream_constraints=constraints,
-        async_processing=True,
+        async_processing=True
     )
