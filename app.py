@@ -45,7 +45,7 @@ target = st.sidebar.selectbox(
 st.sidebar.markdown("## ⚙️ Paramètres YOLO")
 
 conf = st.sidebar.slider("Confiance", 0.1, 0.9, 0.35, 0.05)
-iou = st.sidebar.slider("IoU", 0.1, 0.9, 0.45, 0.05)
+iou = st.sidebar.slider("IoU", 0.1, 0.9, 0.15, 0.05)
 imgsz = st.sidebar.select_slider("Résolution", [320, 416, 512], value=320)
 
 # ====================================================
